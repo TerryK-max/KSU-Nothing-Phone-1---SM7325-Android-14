@@ -39,31 +39,39 @@ jobs:
           export ARCH=arm64
           export SUBARCH=arm64
 
-          # --- 1. PATCHS QUALCOMM (Indispensables) ---
+          # --- 1. PATCHS QUALCOMM / NOTHING (Stable) ---
           sed -i 's/static inline int cpu_boost_init(void) { }/static inline int cpu_boost_init(void) { return 0; }/g' kernel/sched/walt/walt.h
           sed -i '1i extern unsigned long nohz_flags(int cpu);' kernel/sched/walt/qc_vas.c
           sed -i '1i #define NOHZ_KICK_MASK 0x1' kernel/sched/walt/qc_vas.c
           sed -i 's/usb_qdss_alloc_req(ch, USB_BUF_NUM)/usb_qdss_alloc_req(ch, USB_BUF_NUM, USB_BUF_NUM)/g' drivers/hwtracing/coresight/coresight-byte-cntr.c
 
-          # --- 2. PATCH KERNELSU (LA MÉTHODE MAKEFILE) ---
-          # On cherche où est le dossier uapi de KernelSU
+          # --- 2. INTEGRATION KERNELSU (FORCE INCLUDE) ---
+          # On remplace le lien symbolique drivers/kernelsu par un vrai dossier physique pour éviter les soucis de chemins
+          if [ -L drivers/kernelsu ]; then
+            KSU_REAL_PATH=$(readlink -f drivers/kernelsu)
+            rm drivers/kernelsu
+            cp -a "$KSU_REAL_PATH" drivers/kernelsu
+          fi
+
+          # On crée des liens symboliques internes pour satisfaire les includes relatifs "uapi/..."
+          # Dans core/ et dans policy/
           KSU_UAPI_DIR=$(find drivers/kernelsu -name "uapi" -type d | head -n 1)
+          mkdir -p drivers/kernelsu/core/uapi
+          mkdir -p drivers/kernelsu/policy/uapi
+          cp -f "$KSU_UAPI_DIR"/*.h drivers/kernelsu/core/uapi/
+          cp -f "$KSU_UAPI_DIR"/*.h drivers/kernelsu/policy/uapi/
           
-          # On crée un lien symbolique 'uapi' à la racine de kernelsu pour que 
-          # les inclusions relatives "uapi/..." fonctionnent depuis 'core' et 'policy'
-          ln -sf $(basename $KSU_UAPI_DIR) drivers/kernelsu/uapi
+          # On injecte les headers dans le dossier système du noyau pour le "plan B"
+          mkdir -p include/linux/
+          cp -f "$KSU_UAPI_DIR"/*.h include/linux/
 
-          # On injecte le chemin d'inclusion directement dans le Makefile de KernelSU
-          # Cela force le compilateur à chercher dans le dossier racine de KSU
-          echo "ccflags-y += -I\$(srctree)/drivers/kernelsu" >> drivers/kernelsu/Makefile
-          echo "ccflags-y += -I\$(srctree)/drivers/kernelsu/uapi" >> drivers/kernelsu/Makefile
-
-          # --- 3. PRÉPARATION DE LA CONFIGURATION ---
+          # --- 3. CONFIGURATION ---
           mkdir -p out
           cat arch/arm64/configs/gki_defconfig arch/arm64/configs/vendor/lahaina_QGKI.config > arch/arm64/configs/nothing_defconfig
           make O=out nothing_defconfig
 
           # --- 4. COMPILATION ---
+          # On ajoute les chemins KSU directement dans les flags de compilation globaux
           make -j$(nproc) O=out \
                       CC=clang \
                       LD=ld.lld \
@@ -77,7 +85,7 @@ jobs:
                       CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
                       LLVM=1 \
                       LLVM_IAS=1 \
-                      KCFLAGS="-Wno-error -Wno-return-type -Wno-implicit-function-declaration -Wno-align-mismatch -fno-stack-protector"
+                      KCFLAGS="-Wno-error -Wno-return-type -Wno-implicit-function-declaration -Wno-align-mismatch -fno-stack-protector -I$(pwd)/drivers/kernelsu -I$(pwd)/drivers/kernelsu/uapi"
 
       - name: 📦 Création du fichier ZIP flashable (AnyKernel3)
         run: |
