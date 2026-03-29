@@ -39,29 +39,26 @@ jobs:
           export ARCH=arm64
           export SUBARCH=arm64
 
-          # --- 1. PATCHS CHIRURGICAUX ---
-          # Patch WALT (return type)
+          # --- 1. PATCHS CHIRURGICAUX (Qualcomm/Nothing) ---
           sed -i 's/static inline int cpu_boost_init(void) { }/static inline int cpu_boost_init(void) { return 0; }/g' kernel/sched/walt/walt.h
-          
-          # Patch qc_vas (nohz_flags)
           sed -i '1i extern unsigned long nohz_flags(int cpu);' kernel/sched/walt/qc_vas.c
           sed -i '1i #define NOHZ_KICK_MASK 0x1' kernel/sched/walt/qc_vas.c
-
-          # Patch Coresight USB (arguments)
           sed -i 's/usb_qdss_alloc_req(ch, USB_BUF_NUM)/usb_qdss_alloc_req(ch, USB_BUF_NUM, USB_BUF_NUM)/g' drivers/hwtracing/coresight/coresight-byte-cntr.c
 
-          # --- 1.5 CORRECTIF KERNELSU (AUTO-DETECT) ---
-          # On cherche où est caché ce fameux fichier app_profile.h
-          KSU_HEADER_FILE=$(find . -name app_profile.h | head -n 1)
-          echo "🔍 Fichier trouvé ici : $KSU_HEADER_FILE"
-          
-          # On le copie là où le compilateur l'attendait (dans le dossier policy/uapi)
+          # --- 1.5 CORRECTIF KERNELSU (SOLUTION GLOBALE) ---
+          # On localise le dossier source des headers KernelSU
+          KSU_UAPI_SRC=$(find $(pwd) -name "uapi" -type d | grep "kernelsu" | head -n 1)
+          echo "🔍 Source UAPI trouvée : $KSU_UAPI_SRC"
+
+          # On copie TOUT le contenu vers les destinations critiques
           mkdir -p drivers/kernelsu/policy/uapi
-          cp "$KSU_HEADER_FILE" drivers/kernelsu/policy/uapi/app_profile.h
+          cp -r "$KSU_UAPI_SRC"/* drivers/kernelsu/policy/uapi/
           
-          # Optionnel : on le met aussi dans les include globaux pour être sûr
-          mkdir -p include/uapi/linux
-          cp "$KSU_HEADER_FILE" include/uapi/linux/app_profile.h
+          mkdir -p drivers/kernelsu/core/uapi
+          cp -r "$KSU_UAPI_SRC"/* drivers/kernelsu/core/uapi/
+          
+          mkdir -p include/uapi
+          cp -r "$KSU_UAPI_SRC"/* include/uapi/
 
           # --- 2. PRÉPARATION DE LA CONFIGURATION ---
           mkdir -p out
