@@ -39,23 +39,18 @@ jobs:
           export ARCH=arm64
           export SUBARCH=arm64
 
-          # --- 1. PATCHS QUALCOMM / NOTHING ---
+          # --- 1. PATCHS QUALCOMM / NOTHING (Toujours indispensables) ---
           sed -i 's/static inline int cpu_boost_init(void) { }/static inline int cpu_boost_init(void) { return 0; }/g' kernel/sched/walt/walt.h
           sed -i '1i extern unsigned long nohz_flags(int cpu);' kernel/sched/walt/qc_vas.c
           sed -i '1i #define NOHZ_KICK_MASK 0x1' kernel/sched/walt/qc_vas.c
           sed -i 's/usb_qdss_alloc_req(ch, USB_BUF_NUM)/usb_qdss_alloc_req(ch, USB_BUF_NUM, USB_BUF_NUM)/g' drivers/hwtracing/coresight/coresight-byte-cntr.c
 
-          # --- 2. PATCH KERNELSU (SUR LA VRAIE SOURCE) ---
-          # On cherche le dossier qui contient app_profile.h DANS la vraie source
-          KSU_UAPI=$(find KernelSU -name "app_profile.h" -exec dirname {} + | head -n 1)
-          echo "✅ Dossier UAPI trouvé : $KSU_UAPI"
-          
-          # On injecte les headers vitaux dans le dossier système global du noyau
-          cp $KSU_UAPI/*.h include/linux/
-          
-          # On modifie le code source original de KernelSU pour qu'il pointe vers <linux/...>
-          # En modifiant KernelSU/ directement, on contourne TOUS les bugs du lien symbolique
-          find KernelSU -type f -name "*.[ch]" -exec sed -i 's|include "uapi/\([^"]*\)"|include <linux/\1>|g' {} +
+          # --- 2. INTEGRATION KERNELSU (LE RADAR GLOBAL) ---
+          # On ne modifie AUCUN fichier de KernelSU.
+          # On récupère juste la liste de tous ses sous-dossiers et on ajoute le préfixe "-I" 
+          # pour dire au compilateur de chercher dedans.
+          KSU_INCLUDES=$(find $(pwd)/KernelSU -type d -not -path "*/\.git*" | awk '{print "-I" $0}' | tr '\n' ' ')
+          echo "🔍 Chemins d'inclusion KSU générés avec succès."
 
           # --- 3. CONFIGURATION ---
           mkdir -p out
@@ -63,6 +58,7 @@ jobs:
           make O=out nothing_defconfig
 
           # --- 4. COMPILATION ---
+          # On injecte nos chemins $KSU_INCLUDES directement dans les drapeaux de compilation
           make -j$(nproc) O=out \
                       CC=clang \
                       LD=ld.lld \
@@ -76,7 +72,7 @@ jobs:
                       CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
                       LLVM=1 \
                       LLVM_IAS=1 \
-                      KCFLAGS="-Wno-error -Wno-return-type -Wno-implicit-function-declaration -Wno-align-mismatch -fno-stack-protector"
+                      KCFLAGS="-Wno-error -Wno-return-type -Wno-implicit-function-declaration -Wno-align-mismatch -fno-stack-protector $KSU_INCLUDES"
 
       - name: 📦 Création du fichier ZIP flashable (AnyKernel3)
         run: |
