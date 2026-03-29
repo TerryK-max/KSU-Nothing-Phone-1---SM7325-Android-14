@@ -39,29 +39,32 @@ jobs:
           export ARCH=arm64
           export SUBARCH=arm64
 
-          # --- 1. PATCHS QUALCOMM / NOTHING (Indispensables) ---
+          # --- 1. PATCHS QUALCOMM / NOTHING ---
           sed -i 's/static inline int cpu_boost_init(void) { }/static inline int cpu_boost_init(void) { return 0; }/g' kernel/sched/walt/walt.h
           sed -i '1i extern unsigned long nohz_flags(int cpu);' kernel/sched/walt/qc_vas.c
           sed -i '1i #define NOHZ_KICK_MASK 0x1' kernel/sched/walt/qc_vas.c
           sed -i 's/usb_qdss_alloc_req(ch, USB_BUF_NUM)/usb_qdss_alloc_req(ch, USB_BUF_NUM, USB_BUF_NUM)/g' drivers/hwtracing/coresight/coresight-byte-cntr.c
 
-          # --- 2. INTEGRATION KERNELSU (MÉTHODE GLOBALE) ---
-          # On déplace KSU dans drivers si ce n'est pas déjà fait
-          [ -d "KernelSU" ] && mv KernelSU drivers/kernelsu
+          # --- 2. INTEGRATION KERNELSU (MÉTHODE NETTOYAGE) ---
+          # On supprime tout lien existant pour éviter l'erreur de récursion
+          rm -rf drivers/kernelsu
+          
+          # On place KernelSU proprement dans les drivers
+          if [ -d "KernelSU" ]; then
+            mv KernelSU drivers/kernelsu
+          fi
 
-          # On trouve le dossier contenant les headers (.h) de KernelSU
+          # On localise les headers (.h)
           KSU_H_DIR=$(find drivers/kernelsu -name "app_profile.h" -exec dirname {} + | head -n 1)
           echo "🔍 Headers KSU trouvés dans : $KSU_H_DIR"
 
-          # Étape CRUCIALE : On injecte tous les headers KSU dans le dossier système du noyau
+          # Injection dans le dossier système du noyau
           cp -f $KSU_H_DIR/*.h include/linux/
 
-          # On patche les fichiers KSU pour utiliser les headers globaux <linux/...> 
-          # au lieu des chemins relatifs qui cassent tout
+          # On patche les fichiers KSU pour utiliser les headers globaux <linux/...>
           find drivers/kernelsu -type f -name "*.h" -exec sed -i 's|include "uapi/\([^"]*\)"|include <linux/\1>|g' {} +
           find drivers/kernelsu -type f -name "*.c" -exec sed -i 's|include "uapi/\([^"]*\)"|include <linux/\1>|g' {} +
-          # On gère aussi les inclusions locales simples
-          find drivers/kernelsu -type f -name "*.h" -exec sed -i 's|include "\([^./]*\).h"|include <linux/\1.h>|g' {} +
+          find drivers/kernelsu -type f -name "*.[ch]" -exec sed -i 's|#include "\([^./]*\).h"|#include <linux/\1.h>|g' {} +
 
           # --- 3. CONFIGURATION ---
           mkdir -p out
