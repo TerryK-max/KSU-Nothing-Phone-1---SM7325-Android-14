@@ -39,12 +39,16 @@ jobs:
           export ARCH=arm64
           export SUBARCH=arm64
           
-          # Définit la configuration de base pour le Snapdragon 778G+ (Lahaina/Yupik)
-          export DEFCONFIG="vendor/yupik-qgki_defconfig"
+          # Correction du nom de la config pour le Phone (1)
+          export DEFCONFIG="vendor/yupik-qgki_defconfig" 
           
+          # On crée le dossier de sortie
+          mkdir -p out
+          
+          # Génération de la config
           make O=out $DEFCONFIG
           
-          # Lancement de la compilation avec Clang
+          # Lancement de la compilation
           make -j$(nproc) O=out \
                       CC=clang \
                       CROSS_COMPILE=aarch64-linux-gnu- \
@@ -54,7 +58,9 @@ jobs:
                       NM=llvm-nm \
                       OBJCOPY=llvm-objcopy \
                       OBJDUMP=llvm-objdump \
-                      STRIP=llvm-strip
+                      STRIP=llvm-strip \
+                      LLVM=1 \
+                      LLVM_IAS=1
 
       - name: 📦 Création du fichier ZIP flashable (AnyKernel3)
         run: |
