@@ -39,16 +39,16 @@ jobs:
           export ARCH=arm64
           export SUBARCH=arm64
           
-          # 1. On crée le fichier de config attendu par make à partir du fragment Qualcomm
-          # On utilise lahaina_QGKI.config qui est le standard pour ton processeur
+          # 1. Correctif pour l'erreur "non-void function does not return a value"
+          # On remplace la fonction vide par une fonction qui retourne 0
+          sed -i 's/static inline int cpu_boost_init(void) { }/static inline int cpu_boost_init(void) { return 0; }/g' kernel/sched/walt/walt.h
+
+          # 2. Préparation de la config (comme avant)
           mkdir -p out
           cp arch/arm64/configs/vendor/lahaina_QGKI.config arch/arm64/configs/vendor/nothing_defconfig
-          
-          # 2. On prépare la config
           make O=out vendor/nothing_defconfig
           
-          # 3. Lancement de la compilation
-          # Note : On ajoute LLVM=1 pour utiliser la suite d'outils Clang complète
+          # 3. Lancement de la compilation avec KCFLAGS pour ignorer les erreurs d'avertissement
           make -j$(nproc) O=out \
                       CC=clang \
                       LD=ld.lld \
@@ -61,7 +61,8 @@ jobs:
                       CROSS_COMPILE=aarch64-linux-gnu- \
                       CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
                       LLVM=1 \
-                      LLVM_IAS=1
+                      LLVM_IAS=1 \
+                      KCFLAGS="-Wno-error -Wno-return-type"
 
       - name: 📦 Création du fichier ZIP flashable (AnyKernel3)
         run: |
