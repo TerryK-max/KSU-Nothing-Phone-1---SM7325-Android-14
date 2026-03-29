@@ -45,19 +45,20 @@ jobs:
           sed -i '1i #define NOHZ_KICK_MASK 0x1' kernel/sched/walt/qc_vas.c
           sed -i 's/usb_qdss_alloc_req(ch, USB_BUF_NUM)/usb_qdss_alloc_req(ch, USB_BUF_NUM, USB_BUF_NUM)/g' drivers/hwtracing/coresight/coresight-byte-cntr.c
 
-          # --- 2. PATCH KERNELSU (LA MÉTHODE FINALE) ---
-          # On ramasse TOUS les fichiers .h de KernelSU, peu importe où ils sont
-          find drivers/kernelsu -name "*.h" -exec cp {} include/linux/ \;
+          # --- 2. PATCH KERNELSU (LA MÉTHODE MAKEFILE) ---
+          # On cherche où est le dossier uapi de KernelSU
+          KSU_UAPI_DIR=$(find drivers/kernelsu -name "uapi" -type d | head -n 1)
           
-          # On nettoie les fichiers sources de KSU pour qu'ils utilisent uniquement include/linux/
-          # 1. On répare les inclusions uapi mal formées (le bug du <...h")
-          grep -rl 'include <linux/' drivers/kernelsu | xargs sed -i 's|include <linux/\([^">]*\)"|include <linux/\1>|g' || true
-          
-          # 2. On transforme TOUS les includes locaux "fichier.h" en globaux <linux/fichier.h>
-          # C'est radical, mais ça force le compilateur à les trouver dans include/linux
-          find drivers/kernelsu -type f -name "*.[ch]" -exec sed -i 's|#include "\(.*\).h"|#include <linux/\1.h>|g' {} +
+          # On crée un lien symbolique 'uapi' à la racine de kernelsu pour que 
+          # les inclusions relatives "uapi/..." fonctionnent depuis 'core' et 'policy'
+          ln -sf $(basename $KSU_UAPI_DIR) drivers/kernelsu/uapi
 
-          # --- 3. CONFIGURATION ---
+          # On injecte le chemin d'inclusion directement dans le Makefile de KernelSU
+          # Cela force le compilateur à chercher dans le dossier racine de KSU
+          echo "ccflags-y += -I\$(srctree)/drivers/kernelsu" >> drivers/kernelsu/Makefile
+          echo "ccflags-y += -I\$(srctree)/drivers/kernelsu/uapi" >> drivers/kernelsu/Makefile
+
+          # --- 3. PRÉPARATION DE LA CONFIGURATION ---
           mkdir -p out
           cat arch/arm64/configs/gki_defconfig arch/arm64/configs/vendor/lahaina_QGKI.config > arch/arm64/configs/nothing_defconfig
           make O=out nothing_defconfig
