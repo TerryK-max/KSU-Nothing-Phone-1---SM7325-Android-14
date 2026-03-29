@@ -1,0 +1,74 @@
+name: Build KernelSU (Nothing Phone 1 - SM7325)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-kernel:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: 🧹 Nettoyage de l'espace disque
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          sudo apt-get clean
+
+      - name: 🛠️ Installation des dépendances
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential bc gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi libssl-dev libfl-dev curl wget git zip unzip
+
+      - name: 📥 Téléchargement de Proton-Clang (Compilateur)
+        run: |
+          # On utilise Proton-Clang, le standard communautaire pour compiler les noyaux Android
+          git clone --depth=1 https://github.com/kdrag0n/proton-clang.git ~/proton-clang
+
+      - name: 📥 Téléchargement du noyau Nothing Phone 1
+        run: |
+          # Dépôt officiel Nothing OSS pour le Phone 1 (SM7325) - Branche Android 14 (U)
+          git clone --depth=1 https://github.com/NothingOSS/android_kernel_msm-5.4_nothing_sm7325.git -b sm7325/u/mr android-kernel
+
+      - name: 💉 Injection de KernelSU
+        run: |
+          cd android-kernel
+          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
+
+      - name: 🏗️ Compilation du Kernel
+        run: |
+          cd android-kernel
+          export PATH="$HOME/proton-clang/bin:$PATH"
+          export ARCH=arm64
+          export SUBARCH=arm64
+          
+          # Définit la configuration de base pour le Snapdragon 778G+ (Lahaina/Yupik)
+          export DEFCONFIG="vendor/lahaina-qgki_defconfig" 
+          
+          make O=out $DEFCONFIG
+          
+          # Lancement de la compilation avec Clang
+          make -j$(nproc) O=out \
+                      CC=clang \
+                      CROSS_COMPILE=aarch64-linux-gnu- \
+                      CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+                      LD=ld.lld \
+                      AR=llvm-ar \
+                      NM=llvm-nm \
+                      OBJCOPY=llvm-objcopy \
+                      OBJDUMP=llvm-objdump \
+                      STRIP=llvm-strip
+
+      - name: 📦 Création du fichier ZIP flashable (AnyKernel3)
+        run: |
+          git clone https://github.com/osm0sis/AnyKernel3.git
+          cd AnyKernel3
+          # On désactive la vérification stricte du nom de l'appareil pour éviter les erreurs de flash
+          sed -i 's/do.devicecheck=1/do.devicecheck=0/g' anykernel.sh
+          
+          # On copie le noyau compilé (Image) dans le dossier AnyKernel
+          cp ../android-kernel/out/arch/arm64/boot/Image .
+          zip -r9 ../KernelSU-NothingPhone1.zip *
+
+      - name: 🚀 Upload du ZIP final
+        uses: actions/upload-artifact@v4
+        with:
+          name: KernelSU-NothingPhone1-Flashable
+          path: KernelSU-NothingPhone1.zip
