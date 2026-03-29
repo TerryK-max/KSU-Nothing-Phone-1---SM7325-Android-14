@@ -39,25 +39,29 @@ jobs:
           export ARCH=arm64
           export SUBARCH=arm64
 
-          # --- 1. PATCHS QUALCOMM (Indispensables) ---
+          # --- 1. PATCHS QUALCOMM / NOTHING (Indispensables) ---
           sed -i 's/static inline int cpu_boost_init(void) { }/static inline int cpu_boost_init(void) { return 0; }/g' kernel/sched/walt/walt.h
           sed -i '1i extern unsigned long nohz_flags(int cpu);' kernel/sched/walt/qc_vas.c
           sed -i '1i #define NOHZ_KICK_MASK 0x1' kernel/sched/walt/qc_vas.c
           sed -i 's/usb_qdss_alloc_req(ch, USB_BUF_NUM)/usb_qdss_alloc_req(ch, USB_BUF_NUM, USB_BUF_NUM)/g' drivers/hwtracing/coresight/coresight-byte-cntr.c
 
-          # --- 2. REPOSITIONNEMENT ET PATCH KERNELSU ---
-          # Si KernelSU est à la racine, on le déplace/lie dans drivers/
-          if [ -d "KernelSU" ] && [ ! -d "drivers/kernelsu" ]; then
-            mv KernelSU drivers/kernelsu
-          fi
+          # --- 2. INTEGRATION KERNELSU (MÉTHODE GLOBALE) ---
+          # On déplace KSU dans drivers si ce n'est pas déjà fait
+          [ -d "KernelSU" ] && mv KernelSU drivers/kernelsu
 
-          # On s'assure que le dossier uapi est visible partout dans KSU
-          # On crée des liens symboliques relatifs pour que "uapi/app_profile.h" soit trouvé
-          cd drivers/kernelsu
-          mkdir -p core/uapi policy/uapi
-          cp -f kernel/*.h core/uapi/ 2>/dev/null || cp -f uapi/*.h core/uapi/ 2>/dev/null || true
-          cp -f kernel/*.h policy/uapi/ 2>/dev/null || cp -f uapi/*.h policy/uapi/ 2>/dev/null || true
-          cd ../..
+          # On trouve le dossier contenant les headers (.h) de KernelSU
+          KSU_H_DIR=$(find drivers/kernelsu -name "app_profile.h" -exec dirname {} + | head -n 1)
+          echo "🔍 Headers KSU trouvés dans : $KSU_H_DIR"
+
+          # Étape CRUCIALE : On injecte tous les headers KSU dans le dossier système du noyau
+          cp -f $KSU_H_DIR/*.h include/linux/
+
+          # On patche les fichiers KSU pour utiliser les headers globaux <linux/...> 
+          # au lieu des chemins relatifs qui cassent tout
+          find drivers/kernelsu -type f -name "*.h" -exec sed -i 's|include "uapi/\([^"]*\)"|include <linux/\1>|g' {} +
+          find drivers/kernelsu -type f -name "*.c" -exec sed -i 's|include "uapi/\([^"]*\)"|include <linux/\1>|g' {} +
+          # On gère aussi les inclusions locales simples
+          find drivers/kernelsu -type f -name "*.h" -exec sed -i 's|include "\([^./]*\).h"|include <linux/\1.h>|g' {} +
 
           # --- 3. CONFIGURATION ---
           mkdir -p out
@@ -65,7 +69,6 @@ jobs:
           make O=out nothing_defconfig
 
           # --- 4. COMPILATION ---
-          # On injecte les headers KernelSU directement dans les flags globaux
           make -j$(nproc) O=out \
                       CC=clang \
                       LD=ld.lld \
@@ -79,7 +82,7 @@ jobs:
                       CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
                       LLVM=1 \
                       LLVM_IAS=1 \
-                      KCFLAGS="-Wno-error -Wno-return-type -Wno-implicit-function-declaration -Wno-align-mismatch -fno-stack-protector -I$(pwd)/drivers/kernelsu/kernel -I$(pwd)/drivers/kernelsu/uapi"
+                      KCFLAGS="-Wno-error -Wno-return-type -Wno-implicit-function-declaration -Wno-align-mismatch -fno-stack-protector -I$(pwd)/include"
 
       - name: 📦 Création du fichier ZIP flashable (AnyKernel3)
         run: |
