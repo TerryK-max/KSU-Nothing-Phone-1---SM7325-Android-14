@@ -45,26 +45,15 @@ jobs:
           sed -i '1i #define NOHZ_KICK_MASK 0x1' kernel/sched/walt/qc_vas.c
           sed -i 's/usb_qdss_alloc_req(ch, USB_BUF_NUM)/usb_qdss_alloc_req(ch, USB_BUF_NUM, USB_BUF_NUM)/g' drivers/hwtracing/coresight/coresight-byte-cntr.c
 
-          # --- 2. INTEGRATION KERNELSU (MÉTHODE NETTOYAGE) ---
-          # On supprime tout lien existant pour éviter l'erreur de récursion
-          rm -rf drivers/kernelsu
+          # --- 2. PATCH KERNELSU (UNIQUEMENT LES HEADERS) ---
+          # On laisse le dossier drivers/kernelsu tranquille !
           
-          # On place KernelSU proprement dans les drivers
-          if [ -d "KernelSU" ]; then
-            mv KernelSU drivers/kernelsu
-          fi
-
-          # On localise les headers (.h)
-          KSU_H_DIR=$(find drivers/kernelsu -name "app_profile.h" -exec dirname {} + | head -n 1)
-          echo "🔍 Headers KSU trouvés dans : $KSU_H_DIR"
-
-          # Injection dans le dossier système du noyau
-          cp -f $KSU_H_DIR/*.h include/linux/
-
-          # On patche les fichiers KSU pour utiliser les headers globaux <linux/...>
-          find drivers/kernelsu -type f -name "*.h" -exec sed -i 's|include "uapi/\([^"]*\)"|include <linux/\1>|g' {} +
-          find drivers/kernelsu -type f -name "*.c" -exec sed -i 's|include "uapi/\([^"]*\)"|include <linux/\1>|g' {} +
-          find drivers/kernelsu -type f -name "*.[ch]" -exec sed -i 's|#include "\([^./]*\).h"|#include <linux/\1.h>|g' {} +
+          # On copie juste les fichiers "uapi" problématiques dans le dossier système de Linux
+          cp -f drivers/kernelsu/uapi/*.h include/linux/ 2>/dev/null || true
+          
+          # On remplace uniquement les appels "uapi/fichier.h" par <linux/fichier.h>
+          # La regex capture le nom du fichier et remet le bon chevron fermant
+          find drivers/kernelsu -type f -name "*.[ch]" -exec sed -i 's|include "uapi/\([^"]*\)"|include <linux/\1>|g' {} +
 
           # --- 3. CONFIGURATION ---
           mkdir -p out
@@ -85,7 +74,7 @@ jobs:
                       CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
                       LLVM=1 \
                       LLVM_IAS=1 \
-                      KCFLAGS="-Wno-error -Wno-return-type -Wno-implicit-function-declaration -Wno-align-mismatch -fno-stack-protector -I$(pwd)/include"
+                      KCFLAGS="-Wno-error -Wno-return-type -Wno-implicit-function-declaration -Wno-align-mismatch -fno-stack-protector"
 
       - name: 📦 Création du fichier ZIP flashable (AnyKernel3)
         run: |
