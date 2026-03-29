@@ -45,20 +45,24 @@ jobs:
           sed -i '1i #define NOHZ_KICK_MASK 0x1' kernel/sched/walt/qc_vas.c
           sed -i 's/usb_qdss_alloc_req(ch, USB_BUF_NUM)/usb_qdss_alloc_req(ch, USB_BUF_NUM, USB_BUF_NUM)/g' drivers/hwtracing/coresight/coresight-byte-cntr.c
 
-          # --- 1.5 CORRECTIF KERNELSU (SOLUTION GLOBALE) ---
-          # On localise le dossier source des headers KernelSU
-          KSU_UAPI_SRC=$(find $(pwd) -name "uapi" -type d | grep "kernelsu" | head -n 1)
-          echo "🔍 Source UAPI trouvée : $KSU_UAPI_SRC"
-
-          # On copie TOUT le contenu vers les destinations critiques
-          mkdir -p drivers/kernelsu/policy/uapi
-          cp -r "$KSU_UAPI_SRC"/* drivers/kernelsu/policy/uapi/
+          # --- 1.5 CORRECTIF KERNELSU (VERSION SÉCURISÉE) ---
+          # On définit précisément où est le dossier uapi de KernelSU
+          KSU_UAPI_DIR="drivers/kernelsu/uapi"
           
+          # On crée les dossiers de destination dans les sous-modules de KSU
           mkdir -p drivers/kernelsu/core/uapi
-          cp -r "$KSU_UAPI_SRC"/* drivers/kernelsu/core/uapi/
+          mkdir -p drivers/kernelsu/policy/uapi
           
-          mkdir -p include/uapi
-          cp -r "$KSU_UAPI_SRC"/* include/uapi/
+          # On copie UNIQUEMENT les fichiers .h (headers) de KernelSU au bon endroit
+          if [ -d "$KSU_UAPI_DIR" ]; then
+            cp $KSU_UAPI_DIR/*.h drivers/kernelsu/core/uapi/
+            cp $KSU_UAPI_DIR/*.h drivers/kernelsu/policy/uapi/
+            echo "✅ Headers KernelSU copiés avec succès."
+          else
+            echo "⚠️ Dossier uapi introuvable dans drivers/kernelsu, vérification du dossier parent..."
+            # Si le script de setup a mis le uapi un niveau plus haut
+            cp drivers/kernelsu/*.h drivers/kernelsu/core/uapi/ || true
+          fi
 
           # --- 2. PRÉPARATION DE LA CONFIGURATION ---
           mkdir -p out
