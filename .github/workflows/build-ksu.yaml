@@ -45,31 +45,29 @@ jobs:
           sed -i '1i #define NOHZ_KICK_MASK 0x1' kernel/sched/walt/qc_vas.c
           sed -i 's/usb_qdss_alloc_req(ch, USB_BUF_NUM)/usb_qdss_alloc_req(ch, USB_BUF_NUM, USB_BUF_NUM)/g' drivers/hwtracing/coresight/coresight-byte-cntr.c
 
-          # --- 1.5 CORRECTIF KERNELSU (VERSION SÉCURISÉE) ---
-          # On définit précisément où est le dossier uapi de KernelSU
-          KSU_UAPI_DIR="drivers/kernelsu/uapi"
+          # --- 1.5 CORRECTIF KERNELSU (FORCE INCLUDE) ---
+          # On trouve le dossier uapi de KernelSU (il peut être dans drivers/kernelsu/uapi ou KernelSU/kernel/uapi)
+          KSU_UAPI_DIR=$(find . -name "uapi" -type d | grep "kernelsu" | head -n 1)
+          echo "✅ Dossier UAPI KernelSU trouvé ici : $KSU_UAPI_DIR"
+
+          # On crée des liens symboliques dans TOUS les endroits où le compilateur pourrait chercher
+          # 1. Dans le dossier global du noyau
+          mkdir -p include/uapi/linux
+          ln -sf $(pwd)/$KSU_UAPI_DIR/*.h include/uapi/
           
-          # On crée les dossiers de destination dans les sous-modules de KSU
+          # 2. Localement dans les dossiers de KSU pour satisfaire les includes relatifs "uapi/..."
           mkdir -p drivers/kernelsu/core/uapi
           mkdir -p drivers/kernelsu/policy/uapi
-          
-          # On copie UNIQUEMENT les fichiers .h (headers) de KernelSU au bon endroit
-          if [ -d "$KSU_UAPI_DIR" ]; then
-            cp $KSU_UAPI_DIR/*.h drivers/kernelsu/core/uapi/
-            cp $KSU_UAPI_DIR/*.h drivers/kernelsu/policy/uapi/
-            echo "✅ Headers KernelSU copiés avec succès."
-          else
-            echo "⚠️ Dossier uapi introuvable dans drivers/kernelsu, vérification du dossier parent..."
-            # Si le script de setup a mis le uapi un niveau plus haut
-            cp drivers/kernelsu/*.h drivers/kernelsu/core/uapi/ || true
-          fi
+          ln -sf $(pwd)/$KSU_UAPI_DIR/*.h drivers/kernelsu/core/uapi/
+          ln -sf $(pwd)/$KSU_UAPI_DIR/*.h drivers/kernelsu/policy/uapi/
 
-          # --- 2. PRÉPARATION DE LA CONFIGURATION ---
+          # --- 2. CONFIGURATION ---
           mkdir -p out
           cat arch/arm64/configs/gki_defconfig arch/arm64/configs/vendor/lahaina_QGKI.config > arch/arm64/configs/nothing_defconfig
           make O=out nothing_defconfig
 
           # --- 3. COMPILATION ---
+          # On ajoute explicitement le dossier drivers/kernelsu au chemin de recherche (-I)
           make -j$(nproc) O=out \
                       CC=clang \
                       LD=ld.lld \
@@ -83,7 +81,7 @@ jobs:
                       CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
                       LLVM=1 \
                       LLVM_IAS=1 \
-                      KCFLAGS="-Wno-error -Wno-return-type -Wno-implicit-function-declaration -Wno-align-mismatch -fno-stack-protector"
+                      KCFLAGS="-Wno-error -Wno-return-type -Wno-implicit-function-declaration -Wno-align-mismatch -fno-stack-protector -I$(pwd)/drivers/kernelsu"
 
       - name: 📦 Création du fichier ZIP flashable (AnyKernel3)
         run: |
