@@ -40,7 +40,7 @@ jobs:
           export SUBARCH=arm64
           
           # Définit la configuration de base pour le Snapdragon 778G+ (Lahaina/Yupik)
-          export DEFCONFIG="vendor/lahaina-qgki_defconfig" 
+          export DEFCONFIG="vendor/yupik-qgki_defconfig"
           
           make O=out $DEFCONFIG
           
