@@ -40,19 +40,19 @@ jobs:
           export SUBARCH=arm64
 
           # --- 1. PATCHS CHIRURGICAUX ---
-          # Correction du return type (WALT)
+          # Patch WALT (vu précédemment)
           sed -i 's/static inline int cpu_boost_init(void) { }/static inline int cpu_boost_init(void) { return 0; }/g' kernel/sched/walt/walt.h
           
-          # Correction de nohz_flags sans inclure tout le header (évite les redefinitions)
-          # On injecte uniquement le prototype et la macro manquante en haut de qc_vas.c
+          # Patch qc_vas (vu précédemment)
           sed -i '1i extern unsigned long nohz_flags(int cpu);' kernel/sched/walt/qc_vas.c
           sed -i '1i #define NOHZ_KICK_MASK 0x1' kernel/sched/walt/qc_vas.c
 
+          # NEW: Patch Coresight USB (Correction de l'argument manquant)
+          sed -i 's/usb_qdss_alloc_req(ch, USB_BUF_NUM)/usb_qdss_alloc_req(ch, USB_BUF_NUM, USB_BUF_NUM)/g' drivers/hwtracing/coresight/coresight-byte-cntr.c
+
           # --- 2. PRÉPARATION DE LA CONFIGURATION ---
           mkdir -p out
-          # On fusionne les configs : d'abord la base GKI, puis le fragment Nothing
           cat arch/arm64/configs/gki_defconfig arch/arm64/configs/vendor/lahaina_QGKI.config > arch/arm64/configs/nothing_defconfig
-          
           make O=out nothing_defconfig
 
           # --- 3. COMPILATION ---
