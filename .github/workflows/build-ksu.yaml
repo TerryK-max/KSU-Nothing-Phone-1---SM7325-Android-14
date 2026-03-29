@@ -45,15 +45,28 @@ jobs:
           sed -i '1i #define NOHZ_KICK_MASK 0x1' kernel/sched/walt/qc_vas.c
           sed -i 's/usb_qdss_alloc_req(ch, USB_BUF_NUM)/usb_qdss_alloc_req(ch, USB_BUF_NUM, USB_BUF_NUM)/g' drivers/hwtracing/coresight/coresight-byte-cntr.c
 
-          # --- 2. PATCH KERNELSU (LA MÉTHODE RADICALE) ---
-          # On déplace tous les headers de KernelSU dans le dossier include global de Linux
-          # Cela garantit qu'ils seront trouvés peu importe le dossier de compilation
-          KSU_UAPI_DIR=$(find drivers/kernelsu -name "uapi" -type d | head -n 1)
-          cp -r $KSU_UAPI_DIR/*.h include/linux/
+          # --- 2. PATCH KERNELSU (MÉTHODE BULLETPROOF) ---
+          # On cherche le dossier qui contient REELLEMENT les headers de KernelSU
+          KSU_HEADER_DIR=$(find . -name "app_profile.h" -exec dirname {} + | head -n 1)
+          echo "🔍 Dossier des headers KSU trouvé : $KSU_HEADER_DIR"
+
+          if [ -z "$KSU_HEADER_DIR" ]; then
+            echo "❌ Erreur : Impossible de localiser les fichiers KernelSU !"
+            exit 1
+          fi
+
+          # On injecte tout dans include/linux (Le dossier maître des headers)
+          cp "$KSU_HEADER_DIR"/*.h include/linux/
+
+          # On crée aussi un dossier uapi factice là où le compilateur râlait
+          mkdir -p drivers/kernelsu/uapi
+          cp "$KSU_HEADER_DIR"/*.h drivers/kernelsu/uapi/
           
-          # On modifie les fichiers de KernelSU pour qu'ils cherchent les headers en mode "global" <linux/file.h>
-          # au lieu de relatif "uapi/file.h"
-          grep -rl 'include "uapi/' drivers/kernelsu | xargs sed -i 's|include "uapi/|include <linux/|g'
+          mkdir -p drivers/kernelsu/core/uapi
+          cp "$KSU_HEADER_DIR"/*.h drivers/kernelsu/core/uapi/
+
+          # On transforme les chemins d'inclusion pour qu'ils pointent vers include/linux
+          grep -rl 'include "uapi/' drivers/kernelsu | xargs sed -i 's|include "uapi/|include <linux/|g' || true
 
           # --- 3. PRÉPARATION DE LA CONFIGURATION ---
           mkdir -p out
