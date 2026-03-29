@@ -45,15 +45,17 @@ jobs:
           sed -i '1i #define NOHZ_KICK_MASK 0x1' kernel/sched/walt/qc_vas.c
           sed -i 's/usb_qdss_alloc_req(ch, USB_BUF_NUM)/usb_qdss_alloc_req(ch, USB_BUF_NUM, USB_BUF_NUM)/g' drivers/hwtracing/coresight/coresight-byte-cntr.c
 
-          # --- 2. PATCH KERNELSU (UNIQUEMENT LES HEADERS) ---
-          # On laisse le dossier drivers/kernelsu tranquille !
+          # --- 2. PATCH KERNELSU (SUR LA VRAIE SOURCE) ---
+          # On cherche le dossier qui contient app_profile.h DANS la vraie source
+          KSU_UAPI=$(find KernelSU -name "app_profile.h" -exec dirname {} + | head -n 1)
+          echo "✅ Dossier UAPI trouvé : $KSU_UAPI"
           
-          # On copie juste les fichiers "uapi" problématiques dans le dossier système de Linux
-          cp -f drivers/kernelsu/uapi/*.h include/linux/ 2>/dev/null || true
+          # On injecte les headers vitaux dans le dossier système global du noyau
+          cp $KSU_UAPI/*.h include/linux/
           
-          # On remplace uniquement les appels "uapi/fichier.h" par <linux/fichier.h>
-          # La regex capture le nom du fichier et remet le bon chevron fermant
-          find drivers/kernelsu -type f -name "*.[ch]" -exec sed -i 's|include "uapi/\([^"]*\)"|include <linux/\1>|g' {} +
+          # On modifie le code source original de KernelSU pour qu'il pointe vers <linux/...>
+          # En modifiant KernelSU/ directement, on contourne TOUS les bugs du lien symbolique
+          find KernelSU -type f -name "*.[ch]" -exec sed -i 's|include "uapi/\([^"]*\)"|include <linux/\1>|g' {} +
 
           # --- 3. CONFIGURATION ---
           mkdir -p out
