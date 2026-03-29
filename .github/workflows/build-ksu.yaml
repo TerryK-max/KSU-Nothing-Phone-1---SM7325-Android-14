@@ -39,28 +39,40 @@ jobs:
           export ARCH=arm64
           export SUBARCH=arm64
           
-          # Correction du nom de la config pour le Phone (1)
-          export DEFCONFIG="vendor/yupik-qgki_defconfig" 
+          # 1. Debug : On liste tout pour voir le vrai nom en cas d'erreur
+          echo "--- LISTE DES CONFIGS DISPONIBLES ---"
+          ls arch/arm64/configs/vendor/
+          echo "------------------------------------"
+
+          # 2. Détection automatique du defconfig pour Spacewar (Phone 1)
+          # On cherche un fichier qui contient 'yupik' et finit par '_defconfig'
+          DETECTED_CONFIG=$(ls arch/arm64/configs/vendor/ | grep -E "yupik.*_defconfig" | head -n 1)
           
-          # On crée le dossier de sortie
+          if [ -z "$DETECTED_CONFIG" ]; then
+            echo "❌ Erreur : Impossible de trouver une config yupik. Tentative forcée avec 'vendor/yupik_defconfig'..."
+            export DEFCONFIG="vendor/yupik_defconfig"
+          else
+            echo "✅ Config détectée : vendor/$DETECTED_CONFIG"
+            export DEFCONFIG="vendor/$DETECTED_CONFIG"
+          fi
+          
           mkdir -p out
           
-          # Génération de la config
+          # 3. Préparation et Compilation
           make O=out $DEFCONFIG
           
-          # Lancement de la compilation
           make -j$(nproc) O=out \
                       CC=clang \
                       CROSS_COMPILE=aarch64-linux-gnu- \
                       CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+                      LLVM=1 \
+                      LLVM_IAS=1 \
                       LD=ld.lld \
                       AR=llvm-ar \
                       NM=llvm-nm \
                       OBJCOPY=llvm-objcopy \
                       OBJDUMP=llvm-objdump \
-                      STRIP=llvm-strip \
-                      LLVM=1 \
-                      LLVM_IAS=1
+                      STRIP=llvm-strip
 
       - name: 📦 Création du fichier ZIP flashable (AnyKernel3)
         run: |
