@@ -38,17 +38,26 @@ jobs:
           export PATH="$HOME/proton-clang/bin:$PATH"
           export ARCH=arm64
           export SUBARCH=arm64
-          
-          # 1. Correctif pour l'erreur "non-void function does not return a value"
-          # On remplace la fonction vide par une fonction qui retourne 0
-          sed -i 's/static inline int cpu_boost_init(void) { }/static inline int cpu_boost_init(void) { return 0; }/g' kernel/sched/walt/walt.h
 
-          # 2. Préparation de la config (comme avant)
-          mkdir -p out
-          cp arch/arm64/configs/vendor/lahaina_QGKI.config arch/arm64/configs/vendor/nothing_defconfig
-          make O=out vendor/nothing_defconfig
+          # --- 1. PATCHS DU CODE SOURCE ---
+          # Correction de l'erreur précédente (return type)
+          sed -i 's/static inline int cpu_boost_init(void) { }/static inline int cpu_boost_init(void) { return 0; }/g' kernel/sched/walt/walt.h
           
-          # 3. Lancement de la compilation avec KCFLAGS pour ignorer les erreurs d'avertissement
+          # Correction de l'erreur actuelle (nohz_flags manquant dans qc_vas.c)
+          # On ajoute l'inclusion du header sched.h qui contient les définitions NOHZ
+          sed -i '1i#include "../sched.h"' kernel/sched/walt/qc_vas.c
+
+          # --- 2. PRÉPARATION DE LA CONFIGURATION ---
+          # Les kernels Nothing/Qualcomm sont "fragmentés". On fusionne la base GKI avec le fragment Qualcomm.
+          mkdir -p out
+          
+          # On combine la config de base Android et la config spécifique Qualcomm de Nothing
+          cat arch/arm64/configs/gki_defconfig arch/arm64/configs/vendor/lahaina_QGKI.config > arch/arm64/configs/nothing_defconfig
+          
+          make O=out nothing_defconfig
+
+          # --- 3. COMPILATION ---
+          # On ajoute -fno-stack-protector pour éviter les erreurs de "stack frame size"
           make -j$(nproc) O=out \
                       CC=clang \
                       LD=ld.lld \
@@ -62,7 +71,7 @@ jobs:
                       CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
                       LLVM=1 \
                       LLVM_IAS=1 \
-                      KCFLAGS="-Wno-error -Wno-return-type"
+                      KCFLAGS="-Wno-error -Wno-return-type -Wno-implicit-function-declaration -fno-stack-protector"
 
       - name: 📦 Création du fichier ZIP flashable (AnyKernel3)
         run: |
