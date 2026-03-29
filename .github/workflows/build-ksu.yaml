@@ -50,12 +50,18 @@ jobs:
           # Patch Coresight USB (arguments)
           sed -i 's/usb_qdss_alloc_req(ch, USB_BUF_NUM)/usb_qdss_alloc_req(ch, USB_BUF_NUM, USB_BUF_NUM)/g' drivers/hwtracing/coresight/coresight-byte-cntr.c
 
-          # --- 1.5 CORRECTIF KERNELSU ---
-          # On crée un lien symbolique pour que le compilateur trouve les headers de KernelSU
-          mkdir -p include/uapi/linux/
-          cp drivers/kernelsu/uapi/app_profile.h include/uapi/app_profile.h
-          # On corrige aussi le chemin dans le fichier source de KernelSU pour être sûr
-          sed -i 's/#include "uapi\/app_profile.h"/#include <uapi\/app_profile.h>/g' drivers/kernelsu/policy/allowlist.h
+          # --- 1.5 CORRECTIF KERNELSU (AUTO-DETECT) ---
+          # On cherche où est caché ce fameux fichier app_profile.h
+          KSU_HEADER_FILE=$(find . -name app_profile.h | head -n 1)
+          echo "🔍 Fichier trouvé ici : $KSU_HEADER_FILE"
+          
+          # On le copie là où le compilateur l'attendait (dans le dossier policy/uapi)
+          mkdir -p drivers/kernelsu/policy/uapi
+          cp "$KSU_HEADER_FILE" drivers/kernelsu/policy/uapi/app_profile.h
+          
+          # Optionnel : on le met aussi dans les include globaux pour être sûr
+          mkdir -p include/uapi/linux
+          cp "$KSU_HEADER_FILE" include/uapi/linux/app_profile.h
 
           # --- 2. PRÉPARATION DE LA CONFIGURATION ---
           mkdir -p out
