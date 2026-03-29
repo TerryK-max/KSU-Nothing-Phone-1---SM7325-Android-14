@@ -39,35 +39,28 @@ jobs:
           export ARCH=arm64
           export SUBARCH=arm64
 
-          # --- 1. PATCHS CHIRURGICAUX (Qualcomm/Nothing) ---
+          # --- 1. PATCHS QUALCOMM (Comme avant) ---
           sed -i 's/static inline int cpu_boost_init(void) { }/static inline int cpu_boost_init(void) { return 0; }/g' kernel/sched/walt/walt.h
           sed -i '1i extern unsigned long nohz_flags(int cpu);' kernel/sched/walt/qc_vas.c
           sed -i '1i #define NOHZ_KICK_MASK 0x1' kernel/sched/walt/qc_vas.c
           sed -i 's/usb_qdss_alloc_req(ch, USB_BUF_NUM)/usb_qdss_alloc_req(ch, USB_BUF_NUM, USB_BUF_NUM)/g' drivers/hwtracing/coresight/coresight-byte-cntr.c
 
-          # --- 1.5 CORRECTIF KERNELSU (FORCE INCLUDE) ---
-          # On trouve le dossier uapi de KernelSU (il peut être dans drivers/kernelsu/uapi ou KernelSU/kernel/uapi)
-          KSU_UAPI_DIR=$(find . -name "uapi" -type d | grep "kernelsu" | head -n 1)
-          echo "✅ Dossier UAPI KernelSU trouvé ici : $KSU_UAPI_DIR"
-
-          # On crée des liens symboliques dans TOUS les endroits où le compilateur pourrait chercher
-          # 1. Dans le dossier global du noyau
-          mkdir -p include/uapi/linux
-          ln -sf $(pwd)/$KSU_UAPI_DIR/*.h include/uapi/
+          # --- 2. PATCH KERNELSU (LA MÉTHODE RADICALE) ---
+          # On déplace tous les headers de KernelSU dans le dossier include global de Linux
+          # Cela garantit qu'ils seront trouvés peu importe le dossier de compilation
+          KSU_UAPI_DIR=$(find drivers/kernelsu -name "uapi" -type d | head -n 1)
+          cp -r $KSU_UAPI_DIR/*.h include/linux/
           
-          # 2. Localement dans les dossiers de KSU pour satisfaire les includes relatifs "uapi/..."
-          mkdir -p drivers/kernelsu/core/uapi
-          mkdir -p drivers/kernelsu/policy/uapi
-          ln -sf $(pwd)/$KSU_UAPI_DIR/*.h drivers/kernelsu/core/uapi/
-          ln -sf $(pwd)/$KSU_UAPI_DIR/*.h drivers/kernelsu/policy/uapi/
+          # On modifie les fichiers de KernelSU pour qu'ils cherchent les headers en mode "global" <linux/file.h>
+          # au lieu de relatif "uapi/file.h"
+          grep -rl 'include "uapi/' drivers/kernelsu | xargs sed -i 's|include "uapi/|include <linux/|g'
 
-          # --- 2. CONFIGURATION ---
+          # --- 3. PRÉPARATION DE LA CONFIGURATION ---
           mkdir -p out
           cat arch/arm64/configs/gki_defconfig arch/arm64/configs/vendor/lahaina_QGKI.config > arch/arm64/configs/nothing_defconfig
           make O=out nothing_defconfig
 
-          # --- 3. COMPILATION ---
-          # On ajoute explicitement le dossier drivers/kernelsu au chemin de recherche (-I)
+          # --- 4. COMPILATION ---
           make -j$(nproc) O=out \
                       CC=clang \
                       LD=ld.lld \
@@ -81,7 +74,7 @@ jobs:
                       CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
                       LLVM=1 \
                       LLVM_IAS=1 \
-                      KCFLAGS="-Wno-error -Wno-return-type -Wno-implicit-function-declaration -Wno-align-mismatch -fno-stack-protector -I$(pwd)/drivers/kernelsu"
+                      KCFLAGS="-Wno-error -Wno-return-type -Wno-implicit-function-declaration -Wno-align-mismatch -fno-stack-protector"
 
       - name: 📦 Création du fichier ZIP flashable (AnyKernel3)
         run: |
