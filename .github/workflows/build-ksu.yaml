@@ -40,15 +40,22 @@ jobs:
           export SUBARCH=arm64
 
           # --- 1. PATCHS CHIRURGICAUX ---
-          # Patch WALT (vu précédemment)
+          # Patch WALT (return type)
           sed -i 's/static inline int cpu_boost_init(void) { }/static inline int cpu_boost_init(void) { return 0; }/g' kernel/sched/walt/walt.h
           
-          # Patch qc_vas (vu précédemment)
+          # Patch qc_vas (nohz_flags)
           sed -i '1i extern unsigned long nohz_flags(int cpu);' kernel/sched/walt/qc_vas.c
           sed -i '1i #define NOHZ_KICK_MASK 0x1' kernel/sched/walt/qc_vas.c
 
-          # NEW: Patch Coresight USB (Correction de l'argument manquant)
+          # Patch Coresight USB (arguments)
           sed -i 's/usb_qdss_alloc_req(ch, USB_BUF_NUM)/usb_qdss_alloc_req(ch, USB_BUF_NUM, USB_BUF_NUM)/g' drivers/hwtracing/coresight/coresight-byte-cntr.c
+
+          # --- 1.5 CORRECTIF KERNELSU ---
+          # On crée un lien symbolique pour que le compilateur trouve les headers de KernelSU
+          mkdir -p include/uapi/linux/
+          cp drivers/kernelsu/uapi/app_profile.h include/uapi/app_profile.h
+          # On corrige aussi le chemin dans le fichier source de KernelSU pour être sûr
+          sed -i 's/#include "uapi\/app_profile.h"/#include <uapi\/app_profile.h>/g' drivers/kernelsu/policy/allowlist.h
 
           # --- 2. PRÉPARATION DE LA CONFIGURATION ---
           mkdir -p out
