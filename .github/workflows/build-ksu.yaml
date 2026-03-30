@@ -60,14 +60,15 @@ jobs:
             sed -i '4i #endif' $f
           done
           
-          # Fsnotify (LE PIRATAGE DE VERSION - INFAILLIBLE)
-          # On fait croire au code de KernelSU que la nouvelle API n'existe que sur le noyau 99.0.0 !
-          # On remplace aussi les variables KABI au cas où.
+          # Fsnotify (L'ANNIHILATION DU BOSS FINAL)
+          # 1. On supprime toute la logique d'analyse de Fsnotify dans le Makefile de KSU !
+          find drivers/kernelsu KernelSU -name "Makefile" -exec sed -i '/FSNOTIFY/d' {} + 2>/dev/null || true
+          
+          # 2. On tue les BONNES variables (KSU_COMPAT_FSNOTIFY) dans le code source
           for f in $(find drivers/kernelsu KernelSU -name "pkg_observer.c" 2>/dev/null); do
-            sed -i 's/5, 12, 0/99, 0, 0/g' $f
-            sed -i 's/5,12,0/99,0,0/g' $f
-            sed -i 's/ANDROID_KABI_RESERVE/VARIABLE_INEXISTANTE/g' $f
-            sed -i 's/KSU_FSNOTIFY_HAS_INODE_EVENT/VARIABLE_INEXISTANTE/g' $f
+            sed -i '1i #undef KSU_COMPAT_FSNOTIFY' $f
+            sed -i '2i #undef ANDROID_KABI_RESERVE' $f
+            sed -i 's/LINUX_VERSION_CODE >= KERNEL_VERSION(5, 12, 0)/0/g' $f
           done
 
           # --- 3. INTEGRATION KERNELSU (RADAR) ---
