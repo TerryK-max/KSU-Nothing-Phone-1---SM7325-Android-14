@@ -45,29 +45,35 @@ jobs:
           sed -i '1i #define NOHZ_KICK_MASK 0x1' kernel/sched/walt/qc_vas.c
           sed -i 's/usb_qdss_alloc_req(ch, USB_BUF_NUM)/usb_qdss_alloc_req(ch, USB_BUF_NUM, USB_BUF_NUM)/g' drivers/hwtracing/coresight/coresight-byte-cntr.c
 
-          # --- 1.5 PATCHS COMPATIBILITÉ KERNEL 5.4 ---
-          # 1. Correction du renommage de pgtable.h
+          # --- 2. PATCHS COMPATIBILITÉ KERNEL 5.4 ---
+          # Mémoire
           find drivers/kernelsu -type f -exec sed -i 's|<linux/pgtable.h>|<asm/pgtable.h>|g' {} +
           find KernelSU -type f -exec sed -i 's|<linux/pgtable.h>|<asm/pgtable.h>|g' {} + 2>/dev/null || true
-
-          # 2. Correction de la variable SECCOMP manquante
-          # On injecte la définition de repli tout en haut du fichier concerné
+          
+          # Seccomp
           for f in $(find . -name "seccomp_cache.c"); do
             sed -i '1i #include <asm/unistd.h>' $f
             sed -i '2i #ifndef SECCOMP_ARCH_NATIVE_NR' $f
             sed -i '3i #define SECCOMP_ARCH_NATIVE_NR NR_syscalls' $f
             sed -i '4i #endif' $f
           done
+          
+          # Fsnotify (Le petit nouveau)
+          # On désactive la détection de la nouvelle API dans le Makefile et le code
+          sed -i 's/grep -q "handle_inode_event"/false/g' drivers/kernelsu/Makefile 2>/dev/null || true
+          sed -i 's/LINUX_VERSION_CODE >= KERNEL_VERSION(5, 12, 0)/0/g' drivers/kernelsu/manager/pkg_observer.c
+          sed -i 's/defined(ANDROID_KABI_RESERVE)/0/g' drivers/kernelsu/manager/pkg_observer.c
+          sed -i 's/#ifdef KSU_FSNOTIFY_HAS_INODE_EVENT/#if 0/g' drivers/kernelsu/manager/pkg_observer.c
 
-          # --- 2. INTEGRATION KERNELSU (LE RADAR GLOBAL) ---
+          # --- 3. INTEGRATION KERNELSU (RADAR) ---
           KSU_INCLUDES=$(find $(pwd)/KernelSU -type d -not -path "*/\.git*" | awk '{print "-I" $0}' | tr '\n' ' ')
 
-          # --- 3. CONFIGURATION ---
+          # --- 4. CONFIGURATION ---
           mkdir -p out
           cat arch/arm64/configs/gki_defconfig arch/arm64/configs/vendor/lahaina_QGKI.config > arch/arm64/configs/nothing_defconfig
           make O=out nothing_defconfig
 
-          # --- 4. COMPILATION ---
+          # --- 5. COMPILATION ---
           make -j$(nproc) O=out \
                       CC=clang \
                       LD=ld.lld \
