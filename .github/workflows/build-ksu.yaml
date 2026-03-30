@@ -39,18 +39,19 @@ jobs:
           export ARCH=arm64
           export SUBARCH=arm64
 
-          # --- 1. PATCHS QUALCOMM / NOTHING (Toujours indispensables) ---
+          # --- 1. PATCHS QUALCOMM / NOTHING ---
           sed -i 's/static inline int cpu_boost_init(void) { }/static inline int cpu_boost_init(void) { return 0; }/g' kernel/sched/walt/walt.h
           sed -i '1i extern unsigned long nohz_flags(int cpu);' kernel/sched/walt/qc_vas.c
           sed -i '1i #define NOHZ_KICK_MASK 0x1' kernel/sched/walt/qc_vas.c
           sed -i 's/usb_qdss_alloc_req(ch, USB_BUF_NUM)/usb_qdss_alloc_req(ch, USB_BUF_NUM, USB_BUF_NUM)/g' drivers/hwtracing/coresight/coresight-byte-cntr.c
 
+          # --- 1.5 PATCH COMPATIBILITÉ KERNEL 5.4 (LE NOUVEAU CORRECTIF) ---
+          # On remplace le chemin moderne (linux/) par l'ancien chemin (asm/) attendu par ton noyau 5.4
+          find drivers/kernelsu -type f -exec sed -i 's|<linux/pgtable.h>|<asm/pgtable.h>|g' {} +
+          find KernelSU -type f -exec sed -i 's|<linux/pgtable.h>|<asm/pgtable.h>|g' {} + 2>/dev/null || true
+
           # --- 2. INTEGRATION KERNELSU (LE RADAR GLOBAL) ---
-          # On ne modifie AUCUN fichier de KernelSU.
-          # On récupère juste la liste de tous ses sous-dossiers et on ajoute le préfixe "-I" 
-          # pour dire au compilateur de chercher dedans.
           KSU_INCLUDES=$(find $(pwd)/KernelSU -type d -not -path "*/\.git*" | awk '{print "-I" $0}' | tr '\n' ' ')
-          echo "🔍 Chemins d'inclusion KSU générés avec succès."
 
           # --- 3. CONFIGURATION ---
           mkdir -p out
@@ -58,7 +59,6 @@ jobs:
           make O=out nothing_defconfig
 
           # --- 4. COMPILATION ---
-          # On injecte nos chemins $KSU_INCLUDES directement dans les drapeaux de compilation
           make -j$(nproc) O=out \
                       CC=clang \
                       LD=ld.lld \
