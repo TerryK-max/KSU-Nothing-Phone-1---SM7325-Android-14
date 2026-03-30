@@ -45,10 +45,19 @@ jobs:
           sed -i '1i #define NOHZ_KICK_MASK 0x1' kernel/sched/walt/qc_vas.c
           sed -i 's/usb_qdss_alloc_req(ch, USB_BUF_NUM)/usb_qdss_alloc_req(ch, USB_BUF_NUM, USB_BUF_NUM)/g' drivers/hwtracing/coresight/coresight-byte-cntr.c
 
-          # --- 1.5 PATCH COMPATIBILITÉ KERNEL 5.4 (LE NOUVEAU CORRECTIF) ---
-          # On remplace le chemin moderne (linux/) par l'ancien chemin (asm/) attendu par ton noyau 5.4
+          # --- 1.5 PATCHS COMPATIBILITÉ KERNEL 5.4 ---
+          # 1. Correction du renommage de pgtable.h
           find drivers/kernelsu -type f -exec sed -i 's|<linux/pgtable.h>|<asm/pgtable.h>|g' {} +
           find KernelSU -type f -exec sed -i 's|<linux/pgtable.h>|<asm/pgtable.h>|g' {} + 2>/dev/null || true
+
+          # 2. Correction de la variable SECCOMP manquante
+          # On injecte la définition de repli tout en haut du fichier concerné
+          for f in $(find . -name "seccomp_cache.c"); do
+            sed -i '1i #include <asm/unistd.h>' $f
+            sed -i '2i #ifndef SECCOMP_ARCH_NATIVE_NR' $f
+            sed -i '3i #define SECCOMP_ARCH_NATIVE_NR NR_syscalls' $f
+            sed -i '4i #endif' $f
+          done
 
           # --- 2. INTEGRATION KERNELSU (LE RADAR GLOBAL) ---
           KSU_INCLUDES=$(find $(pwd)/KernelSU -type d -not -path "*/\.git*" | awk '{print "-I" $0}' | tr '\n' ' ')
