@@ -46,23 +46,22 @@ jobs:
           sed -i 's/usb_qdss_alloc_req(ch, USB_BUF_NUM)/usb_qdss_alloc_req(ch, USB_BUF_NUM, USB_BUF_NUM)/g' drivers/hwtracing/coresight/coresight-byte-cntr.c
 
           # --- 2. PATCHS COMPATIBILITÉ KERNEL 5.4 ---
-          # Retrait du mode paranoïaque (-Werror) imposé par KernelSU
+          # Retrait du mode paranoïaque (-Werror)
           find drivers/kernelsu KernelSU -name "Makefile" -exec sed -i 's/-Werror//g' {} + 2>/dev/null || true
 
-          # Mémoire
-          find drivers/kernelsu KernelSU -type f -name "*.c" -o -name "*.h" -exec sed -i 's|<linux/pgtable.h>|<asm/pgtable.h>|g' {} + 2>/dev/null || true
+          # Mémoire (Le bon script, robuste et infaillible)
+          grep -rl '<linux/pgtable.h>' drivers/kernelsu KernelSU 2>/dev/null | xargs sed -i 's|<linux/pgtable.h>|<asm/pgtable.h>|g' || true
           
-          # Seccomp
-          for f in $(find . -name "seccomp_cache.c"); do
+          # Seccomp (Sécurité)
+          for f in $(find drivers/kernelsu KernelSU -name "seccomp_cache.c" 2>/dev/null); do
             sed -i '1i #include <asm/unistd.h>' $f
             sed -i '2i #ifndef SECCOMP_ARCH_NATIVE_NR' $f
             sed -i '3i #define SECCOMP_ARCH_NATIVE_NR NR_syscalls' $f
             sed -i '4i #endif' $f
           done
           
-          # Fsnotify (Le tueur de flag)
-          # On tue la variable de force directement dans le code source avant qu'elle ne soit lue
-          for f in $(find . -name "pkg_observer.c"); do
+          # Fsnotify (Le tueur de flag, boss final)
+          for f in $(find drivers/kernelsu KernelSU -name "pkg_observer.c" 2>/dev/null); do
             sed -i '1i #undef KSU_FSNOTIFY_HAS_INODE_EVENT' $f
           done
 
