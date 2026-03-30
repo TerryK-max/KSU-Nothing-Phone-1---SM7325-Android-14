@@ -60,15 +60,16 @@ jobs:
             sed -i '4i #endif' $f
           done
           
-          # Fsnotify (L'ANNIHILATION DU BOSS FINAL)
-          # 1. On supprime toute la logique d'analyse de Fsnotify dans le Makefile de KSU !
-          find drivers/kernelsu KernelSU -name "Makefile" -exec sed -i '/FSNOTIFY/d' {} + 2>/dev/null || true
+          # Fsnotify (L'EFFACEUR)
+          # 1. On purge le Makefile de toute tentative d'injection de la nouvelle API
+          find drivers/kernelsu KernelSU -name "Makefile" -exec sed -i 's/-DKSU_COMPAT_FSNOTIFY//g' {} + 2>/dev/null || true
+          find drivers/kernelsu KernelSU -name "Makefile" -exec sed -i 's/-DKSU_FSNOTIFY_HAS_INODE_EVENT//g' {} + 2>/dev/null || true
           
-          # 2. On tue les BONNES variables (KSU_COMPAT_FSNOTIFY) dans le code source
+          # 2. On utilise une Regex agressive (.*) pour supprimer TOUTE ligne 
+          # qui essaie de définir la variable, peu importe les espaces ou tabulations.
           for f in $(find drivers/kernelsu KernelSU -name "pkg_observer.c" 2>/dev/null); do
-            sed -i '1i #undef KSU_COMPAT_FSNOTIFY' $f
-            sed -i '2i #undef ANDROID_KABI_RESERVE' $f
-            sed -i 's/LINUX_VERSION_CODE >= KERNEL_VERSION(5, 12, 0)/0/g' $f
+            sed -i 's/.*define.*KSU_COMPAT_FSNOTIFY.*//g' $f
+            sed -i 's/.*define.*KSU_FSNOTIFY_HAS_INODE_EVENT.*//g' $f
           done
 
           # --- 3. INTEGRATION KERNELSU (RADAR) ---
