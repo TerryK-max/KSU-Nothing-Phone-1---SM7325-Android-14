@@ -60,13 +60,16 @@ jobs:
             sed -i '4i #endif' $f
           done
           
-          # Fsnotify (Le piratage du fichier final)
-          # On remplace les conditions de détection de KernelSU par #if 0
-          # Cela force le code à utiliser l'ancienne API (handle_event), qui est celle de ton noyau !
+          # Fsnotify (LE BOSS FINAL - L'Exécution)
+          # On nettoie le Makefile pour qu'il n'injecte rien
+          find drivers/kernelsu KernelSU -name "Makefile" -exec sed -i 's/-DKSU_FSNOTIFY_HAS_INODE_EVENT//g' {} + 2>/dev/null || true
+          
+          # On détruit toute la logique de détection automatique dans pkg_observer.c
           for f in $(find drivers/kernelsu KernelSU -name "pkg_observer.c" 2>/dev/null); do
-            sed -i 's/#ifdef KSU_FSNOTIFY_HAS_INODE_EVENT/#if 0/g' $f
-            sed -i 's/#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 12, 0)/#if 0/g' $f
-            sed -i 's/#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 12, 0) || defined(KSU_FSNOTIFY_HAS_INODE_EVENT)/#if 0/g' $f
+            sed -i 's/defined(ANDROID_KABI_RESERVE)/0/g' $f
+            sed -i 's/LINUX_VERSION_CODE >= KERNEL_VERSION(5, 12, 0)/0/g' $f
+            # On commente l'activation locale de la nouvelle API
+            sed -i 's/#define KSU_FSNOTIFY_HAS_INODE_EVENT/\/\/ #define KSU_FSNOTIFY_HAS_INODE_EVENT/g' $f
           done
 
           # --- 3. INTEGRATION KERNELSU (RADAR) ---
