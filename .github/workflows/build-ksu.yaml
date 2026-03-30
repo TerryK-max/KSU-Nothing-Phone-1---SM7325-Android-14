@@ -60,11 +60,15 @@ jobs:
             sed -i '4i #endif' $f
           done
           
-          # Fsnotify (LE JEDI MIND TRICK)
-          # On renomme toutes les variables de détection dans le fichier pour que les "#ifdef" 
-          # soient TOUJOURS faux. C'est brutal mais 100% infaillible.
-          find drivers/kernelsu KernelSU -name "pkg_observer.c" -exec sed -i 's/KSU_FSNOTIFY_HAS_INODE_EVENT/MACRO_IGNORE_1/g' {} + 2>/dev/null || true
-          find drivers/kernelsu KernelSU -name "pkg_observer.c" -exec sed -i 's/ANDROID_KABI_RESERVE/MACRO_IGNORE_2/g' {} + 2>/dev/null || true
+          # Fsnotify (LE PIRATAGE DE VERSION - INFAILLIBLE)
+          # On fait croire au code de KernelSU que la nouvelle API n'existe que sur le noyau 99.0.0 !
+          # On remplace aussi les variables KABI au cas où.
+          for f in $(find drivers/kernelsu KernelSU -name "pkg_observer.c" 2>/dev/null); do
+            sed -i 's/5, 12, 0/99, 0, 0/g' $f
+            sed -i 's/5,12,0/99,0,0/g' $f
+            sed -i 's/ANDROID_KABI_RESERVE/VARIABLE_INEXISTANTE/g' $f
+            sed -i 's/KSU_FSNOTIFY_HAS_INODE_EVENT/VARIABLE_INEXISTANTE/g' $f
+          done
 
           # --- 3. INTEGRATION KERNELSU (RADAR) ---
           KSU_INCLUDES=$(find $(pwd)/KernelSU -type d -not -path "*/\.git*" | awk '{print "-I" $0}' | tr '\n' ' ')
